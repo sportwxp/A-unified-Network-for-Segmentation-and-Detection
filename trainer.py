@@ -100,7 +100,8 @@ class FasterRCNNTrainer(nn.Module):
         # self.vis.img('seg_resoult',at.tonumpy(seg))
 
 
-        seg_loss =  nn.BCEWithLogitsLoss(reduce=True)(seg,masks)
+        # seg_loss =  nn.BCEWithLogitsLoss(reduce=True)(seg,masks)
+        seg_loss = SoftDiceLoss()(seg,masks)
 
         rpn_locs, rpn_scores, rois, roi_indices, anchor = \
             self.faster_rcnn.rpn(features, img_size, scale)
@@ -241,6 +242,21 @@ class FasterRCNNTrainer(nn.Module):
     def get_meter_data(self):
         return {k: v.value()[0] for k, v in self.meters.items()}
 
+class SoftDiceLoss(nn.Module):
+    def __init__(self, weight=None, size_average=True):
+        super(SoftDiceLoss, self).__init__()
+
+    def forward(self, logits, targets):
+        smooth = 1
+        num = targets.size(0)
+        probs = F.sigmoid(logits)
+        m1 = probs.view(num, -1)
+        m2 = targets.view(num, -1)
+        intersection = (m1 * m2)
+
+        score = 2. * (intersection.sum(1) + smooth) / (m1.sum(1) + m2.sum(1) + smooth)
+        score = 1 - score.sum() / num
+        return score
 
 def _smooth_l1_loss(x, t, in_weight, sigma):
     sigma2 = sigma ** 2
